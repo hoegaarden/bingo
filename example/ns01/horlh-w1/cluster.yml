@@ -1,0 +1,22 @@
+apiVersion: run.tanzu.vmware.com/v1alpha2
+kind: TanzuKubernetesCluster
+metadata:
+  name: horlh-w1
+  namespace: ns01
+spec:
+  distribution:
+    version: v1.22
+  topology:
+    controlPlane:
+      replicas: 1
+      storageClass: vc01cl01-t0compute
+      vmClass: best-effort-medium
+    nodePools:
+    - name: workers
+      replicas: 3
+      storageClass: vc01cl01-t0compute
+      vmClass: best-effort-medium
+    - name: others
+      replicas: 1
+      storageClass: vc01cl01-t0compute
+      vmClass: best-effort-medium

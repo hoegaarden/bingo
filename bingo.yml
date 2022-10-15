@@ -61,15 +61,24 @@ spec:
       labels: *labels
     spec:
       serviceAccountName: bingo
+      initContainers:
+      - name: init
+        image: &kubectl bitnami/kubectl
+        command: [ /scripts/init.sh ]
+        volumeMounts:
+        - name: shared
+          mountPath: /shared
+        - name: scripts
+          mountPath: /scripts
       containers:
       - name: git-sync
         image: k8s.gcr.io/git-sync/git-sync:v3.6.1
         command:
         - /git-sync
-        - -v=100
         - --ssh
         - --ssh-known-hosts=false
         - --ssh-known-hosts-file=/dev/null
+        - --dest=repo #! will become '--link'
         env:
         - name: GIT_SYNC_REPO
           valueFrom:
@@ -80,15 +89,110 @@ spec:
         - name: GIT_SYNC_REV
           valueFrom:
             configMapKeyRef: { name: bingo-config, key: rev }
+        - name: GIT_SYNC_PERIOD
+          valueFrom:
+            configMapKeyRef: { name: bingo-config, key: period }
+        - name: GIT_SYNC_EXECHOOK_COMMAND
+          value: /scripts/poke.sh
         volumeMounts:
         - name: creds
           mountPath: /etc/git-secret/ssh
           readOnly: true
           subPath: ssh-key
+        - name: shared
+          mountPath: /shared
+        - name: scripts
+          mountPath: /scripts
+        - name: data
+          mountPath: /tmp/git
+      - name: bingo
+        image: *kubectl
+        command: [ /scripts/bingo.sh ]
+        env:
+        - name: BINGO_SUB_DIR
+          valueFrom:
+            configMapKeyRef: { name: bingo-config, key: dir }
+        volumeMounts:
+        - name: shared
+          mountPath: /shared
+        - name: scripts
+          mountPath: /scripts
+        - name: data
+          mountPath: /data
       volumes:
       - name: creds
         secret:
           secretName: bingo-creds
+      - name: shared
+        emptyDir:
+          medium: Memory
+      - name: data
+        emptyDir:
+          medium: Memory
+      - name: scripts
+        configMap:
+          name: bingo-scripts
+          defaultMode: 0755
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: bingo-scripts
+  namespace: bingo
+data:
+  init.sh: |
+    #!/usr/bin/env bash
+
+    set -e
+    set -u
+    set -o pipefail
+
+    rm -rf -- /shared/pipe
+    mkfifo -m 0666 /shared/pipe
+  bingo.sh: |
+    #!/usr/bin/env bash
+
+    set -e
+    set -u
+    set -o pipefail
+
+    apply() {
+      local cmd="$1"
+      local clusterConf
+
+      echo >&2 "apply: ${cmd}"
+
+      # create some clusters
+      while read -r -d $'\0' clusterConf
+      do
+        kubectl apply -f "$clusterConf"
+      done < <( find . -type f -name cluster.yml -print0 )
+
+      # delete some clusters
+      while read -r -d $'\0' clusterConf
+      do
+        kubectl delete -f "$clusterConf"
+      done < <( find . -type f -name cluster.yml.delete -print0 )
+    }
+
+    main() {
+      local cmd
+      while read -r cmd < /shared/pipe
+      do
+        # cd, because the link might have changed
+        cd "/data/repo/${BINGO_SUB_DIR}"
+        apply "$cmd"
+      done < /shared/pipe
+    }
+
+    main "$@"
+  poke.sh: |
+    #!/bin/sh
+
+    set -e
+    set -u
+
+    echo 'apply' > /shared/pipe
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -99,6 +203,8 @@ data:
   repo: git@github.com:hoegaarden/bingo
   branch: main
   rev: HEAD
+  period: 1m
+  dir: example
 ---
 #! apiVersion: v1
 #! kind: Secret
