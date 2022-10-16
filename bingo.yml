@@ -157,6 +157,8 @@ data:
     set -u
     set -o pipefail
 
+    readonly ME='bingo'
+
     apply() {
       local cmd="$1"
       local clusterConf workloadConf
@@ -193,7 +195,7 @@ data:
 
     applyCluster() {
       echo >&2 "applying:"
-      kubectl apply -f "$1" || {
+      kubectl apply --field-manager="$ME" -f "$1" || {
         echo >&2 'Issues on apply!'
         return # well, ignore and retry on next cycle
       }
@@ -202,7 +204,7 @@ data:
 
     deleteCluster() {
       echo >&2 "deleting:"
-      kubectl delete -f "$1" || {
+      kubectl delete --field-manager="$ME" -f "$1" || {
         echo >&2 'Issues on deletion!'
         return # well, ignore and retry on next cycle
       }
@@ -211,7 +213,7 @@ data:
 
     applyClusterWorkload() {
       echo >&2 "applying workload to remote cluster $1/$2:"
-      kubectl --kubeconfig <(getKubeconf "$1" "$2") apply -f "$3" || {
+      kubectl --kubeconfig <(getKubeconf "$1" "$2") apply --field-manager="$ME" -f "$3" || {
         echo >&2 'Issues on apply!'
         return # well, ignore and retry on next cycle
       }
@@ -220,7 +222,7 @@ data:
 
     deleteClusterWorkload() {
       echo >&2 "deleting workload on remote cluster $1/$2:"
-      kubectl --kubeconfig <(getKubeconf "$1" "$2") delete -f "$3" || {
+      kubectl --kubeconfig <(getKubeconf "$1" "$2") delete --field-manager="$ME" -f "$3" || {
         echo >&2 'Issues on deletion!'
         return # well, ignore and retry on next cycle
       }
