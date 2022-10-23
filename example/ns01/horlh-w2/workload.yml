@@ -1315,7 +1315,7 @@ spec:
               fieldPath: metadata.namespace
         - name: KAPPCTRL_API_PORT
           value: "10350"
-        image: projects.registry.vmware.com/tkg/kapp-controller:v0.30.0_vmware.1
+        image: harbor.10.220.3.197.nip.io/library/tkg/kapp-controller:v0.30.0_vmware.1
         name: kapp-controller
         ports:
         - containerPort: 10350
@@ -1526,7 +1526,7 @@ metadata:
 spec:
   fetch:
     imgpkgBundle:
-      image: projects.registry.vmware.com/tkg/packages/standard/repo:v1.6.0
+      image: harbor.10.220.3.197.nip.io/library/tkg/repo:v1.6.0
 ---
 apiVersion: v1
 kind: Namespace
