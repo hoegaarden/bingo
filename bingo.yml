@@ -1,21 +1,45 @@
-#@ namespaces = [
-#@   "ns01",
-#@ ]
+#@ load("@ytt:data", "data")
+#@ dv = data.values
 
----
-apiVersion: v1
-kind: Namespace
-metadata:
-  name: bingo
+#! ---
+#! apiVersion: v1
+#! kind: Namespace
+#! metadata:
+#!   name: #@ dv.bingo.namespace
 
 ---
 apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: bingo
-  namespace: bingo
+  namespace: #@ dv.bingo.namespace
 
-#@ for ns in namespaces:
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: bingo
+  namespace: bingo
+rules:
+- apiGroups: [""]
+  resources: ["configmaps"]
+  verbs: ["create","update","get","list","delete","patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: bingo
+  namespace: #@ dv.bingo.namespace
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: bingo
+subjects:
+- kind: ServiceAccount
+  name: bingo
+  namespace: #@ dv.bingo.namespace
+
+#@ for ns in dv.namespaces:
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
@@ -26,6 +50,9 @@ rules:
 - apiGroups: [""]
   resources: ["secrets"]
   verbs: ["get", "list"]
+- apiGroups: [""]
+  resources: ["configmaps"]
+  verbs: ["create","update","get","list","delete","patch"]
 - apiGroups: ["run.tanzu.vmware.com"]
   resources: ["tanzukubernetesclusters"]
   verbs: ["create","update","get","list","delete","patch"]
@@ -42,7 +69,7 @@ roleRef:
 subjects:
 - kind: ServiceAccount
   name: bingo
-  namespace: bingo
+  namespace: #@ dv.bingo.namespace
 #@ end
 
 ---
@@ -50,7 +77,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: bingo
-  namespace: bingo
+  namespace: #@ dv.bingo.namespace
 spec:
   replicas: 1
   selector:
@@ -63,7 +90,7 @@ spec:
       serviceAccountName: bingo
       initContainers:
       - name: init
-        image: &kubectl bitnami/kubectl
+        image: &bingo bingo
         command: [ /scripts/init.sh ]
         volumeMounts:
         - name: shared
@@ -93,7 +120,7 @@ spec:
         #! - name: GIT_SYNC_PERIOD
         #!   valueFrom:
         #!     configMapKeyRef: { name: bingo-config, key: period }
-        - name: GIT_SYNC_EXECHOOK_COMMAND
+        - name: GIT_SYNC_EXEiCHOOK_COMMAND
           value: /scripts/poke.sh
         volumeMounts:
         - name: creds
@@ -107,12 +134,15 @@ spec:
         - name: data
           mountPath: /tmp/git
       - name: bingo
-        image: *kubectl
+        image: *bingo
         command: [ /scripts/bingo.sh ]
         env:
         - name: BINGO_SUB_DIR
           valueFrom:
             configMapKeyRef: { name: bingo-config, key: dir }
+        - name: BINGO_APPLY_INTERVAL
+          valueFrom:
+            configMapKeyRef: { name: bingo-config, key: apply_interval }
         volumeMounts:
         - name: shared
           mountPath: /shared
@@ -120,6 +150,8 @@ spec:
           mountPath: /scripts
         - name: data
           mountPath: /data
+        - name: tmp
+          mountPath: /tmp
       volumes:
       - name: creds
         secret:
@@ -130,6 +162,9 @@ spec:
       - name: data
         emptyDir:
           medium: Memory
+      - name: tmp
+        emtyDir:
+          medium: Memory
       - name: scripts
         configMap:
           name: bingo-scripts
@@ -139,7 +174,7 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: bingo-scripts
-  namespace: bingo
+  namespace: #@ dv.bingo.namespace
 data:
   init.sh: |
     #!/usr/bin/env bash
@@ -159,109 +194,120 @@ data:
 
     readonly ME='bingo'
 
-    apply() {
+    apply() (
       local cmd="$1"
-      local clusterConf workloadConf
-      local ns cluster
+      local clusterConf
+      local clustersDir workloadDir workloadDirs=()
+      local clusterNS clusterName
 
-      # delete some cluster workload
-      while read -r -d $'\0' workloadConf
+      workDir="$( mktemp -d -t "XXXXXXXX-apply" )"
+      trap 'rm -rf -- "$workDir"' EXIT
+
+      local clustersDir
+      clustersDir="${workDir}/clusters"
+      mkdir -p "$clustersDir"
+
+      while read -r -d $'\0' clusterConf
       do
-        IFS=/ read -r _ ns cluster _ <<< "$workloadConf"
-        runLogged "${ns}/${cluster}" deleteClusterWorkload "$ns" "$cluster" "$workloadConf"
-      done < <( find . -type f -name workload.yml.delete -print0 )
+        IFS='/' read -r clusterNS clusterName _ <<< "$clusterConf"
 
-      # delete some clusters
-      while read -d $'\0' -r clusterConf
-      do
-        IFS=/ read -r _ ns cluster _ <<< "$clusterConf"
-        runLogged "${ns}/${cluster}" deleteCluster "$clusterConf"
-      done < <( find . -type f -name cluster.yml.delete -print0 )
+        {
+          # Ugghhhh
+          printf '#@ ns = "%s"\n' "$clusterNS"
+          printf '#@ cluster = "%s"\n' "$clusterName"
+          printf -- '---\n'
 
-      # create some clusters
-      while read -d $'\0' -r clusterConf
-      do
-        IFS=/ read -r _ ns cluster _ <<< "$clusterConf"
-        runLogged "${ns}/${cluster}" applyCluster "$clusterConf"
-      done < <( find . -type f -name cluster.yml -print0 )
+          cat "$clusterConf"
+        } > "${clustersDir}/${clusterNS}-${clusterName}.yml"
 
-      # create some cluster workload
-      while read -r -d $'\0' workloadConf
-      do
-        IFS=/ read -r _ ns cluster _ <<< "$workloadConf"
-        runLogged "${ns}/${cluster}" applyClusterWorkload "$ns" "$cluster" "$workloadConf"
-      done < <( find . -type f -name workload.yml -print0 )
-    }
+        workloadDir="${workDir}/${clusterNS},${clusterName}"
+        mkdir -p "$workloadDir"
+        workloadDirs+=( "$workloadDir" )
+        find "${clusterNS}/${clusterName}" -mindepth 1 -maxdepth 1 -type f -iname '*workload*yml' \
+          -exec cp '{}' "${workloadDir}" ';'
+      done < <(find . -maxdepth 3 -mindepth 3 -type f -name 'cluster.yml' -printf '%P\0')
 
-    applyCluster() {
-      echo >&2 "applying:"
-      kubectl apply --field-manager="$ME" -f "$1" || {
-        echo >&2 'Issues on apply!'
-        return # well, ignore and retry on next cycle
+      applyClusters "$clustersDir"
+
+      for workloadDir in "${workloadDirs[@]}" ; do
+        IFS=',' read -r clusterNS clusterName <<< "$(basename "$workloadDir")"
+        applyWorkload "$clusterNS" "$clusterName" "$workloadDir" || {
+          log 'applying cluster workloads for %s/%s failed' "$clusterNS" "$clusterName"
+        }
+      done
+    )
+
+    applyWorkload() {
+      local ns="$1"
+      local cluster="$2"
+      local dir="$3"
+      local app="${ME}-${cluster}-workload"
+
+      local secret="${cluster}-kubeconfig"
+      local kconf="${dir}/${app}.kconf"
+
+      log 'deploying workloads on cluster %s/%s' "$ns" "$cluster"
+
+      kubectl -n "$ns" get secret "${secret}" \
+        -o go-template='{{ .data.value | base64decode }}' \
+        > "$kconf" || {
+        log 'kubeconfig %q for cluster %s/%s not found (yet?)' "$secret" "$ns" "$cluster"
+        return
       }
-      echo >&2 "applying done."
+
+      ytt -v clusterNS="$ns" -v cluster="$clusterName" -f "$dir" \
+        | kapp --kubeconfig "$kconf" deploy --namespace default -y --dangerous-allow-empty-list-of-resources -a "$app" -f -
     }
 
-    deleteCluster() {
-      echo >&2 "deleting:"
-      kubectl delete --field-manager="$ME" -f "$1" || {
-        echo >&2 'Issues on deletion!'
-        return # well, ignore and retry on next cycle
-      }
-      echo >&2 "deleting done."
-    }
-
-    applyClusterWorkload() {
-      echo >&2 "applying workload to remote cluster $1/$2:"
-      kubectl --kubeconfig <(getKubeconf "$1" "$2") apply --field-manager="$ME" -f "$3" || {
-        echo >&2 'Issues on apply!'
-        return # well, ignore and retry on next cycle
-      }
-      echo >&2 "applying done."
-    }
-
-    deleteClusterWorkload() {
-      echo >&2 "deleting workload on remote cluster $1/$2:"
-      kubectl --kubeconfig <(getKubeconf "$1" "$2") delete --field-manager="$ME" -f "$3" || {
-        echo >&2 'Issues on deletion!'
-        return # well, ignore and retry on next cycle
-      }
-      echo >&2 "deleting done."
-    }
-
-    getKubeconf() {
-      kubectl --namespace "$1" get secret "${2}-kubeconfig" \
-        -o go-template='{{ .data.value | base64decode }}'
-    }
-
-    runLogged() {
-      local logPrefix="$1"
+    log() {
+      local msg="$1"
       shift
 
-      "$@" \
-          >  >( awk -v p="${logPrefix},O" '{ print p ": " $0 }' ) \
-          2> >( awk -v p="${logPrefix},E" '{ print p ": " $0 }' >&2 )
+      printf >&2 -- "## ${msg}\n" "$@"
+    }
+
+    applyClusters() {
+      local dir="$1"
+      local app="${ME}-clusters"
+
+      log 'deploying clusters'
+
+      ytt -f "$dir" \
+        | kapp deploy -y --dangerous-allow-empty-list-of-resources -a "$app" -f -
+    }
+
+    startPoker() {
+      while true ; do
+        sleep "$BINGO_APPLY_INTERVAL"
+        echo reapply > /shared/pipe
+      done
     }
 
     main() {
       local cmd
+      local pipe='/shared/pipe'
+      local poker
+
+      startPoker &
+      poker="$!"
 
       while true
       do
-        read -r cmd < /shared/pipe
+        read -r cmd < "$pipe"
 
         case "$cmd" in
           reload)
-            echo >&2 'reloading bingo runner'
+            log 'reloading bingo runner'
+            test -n "$poker" && kill "$poker"
             exec "$0" "$@"
             ;;
           exit|quit|stop)
-            echo >&2 'stopping bingo runner'
+            log 'stopping bingo runner'
             exit 10
             ;;
           *)
             cd "/data/repo/${BINGO_SUB_DIR}"
-            echo >&2 "got '$cmd', running apply in ${PWD}"
+            log "got '$cmd', running apply in ${PWD}"
             apply "$cmd"
             ;;
         esac
@@ -272,7 +318,7 @@ data:
     main "$@" || rc=$?
 
     if [[ $rc -gt 0 ]] ; then
-      echo >&2 "bingo runner's main exited with: $rc"
+      log "bingo runner's main exited with: $rc"
       exit $rc
     fi
   poke.sh: |
@@ -287,23 +333,19 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: bingo-config
-  namespace: bingo
+  namespace: #@ dv.bingo.namespace
 data:
-  repo: git@github.com:hoegaarden/bingo
-  branch: main
-  rev: HEAD
+  repo: #@ dv.repo.url
+  branch: #@ dv.repo.branch
+  rev: #@ dv.repo.rev
   #! period: 1m
-  dir: example
+  dir: #@ dv.repo.dir
+  apply_interval: #@ dv.bingo.interval
 ---
-#! apiVersion: v1
-#! kind: Secret
-#! metadata:
-#!   name: bingo-creds
-#!   namespace: bingo
-#! stringData:
-#!   ssh-key: |
-#!     -----BEGIN OPENSSH PRIVATE KEY-----
-#!     b3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAABAAABlwAAAAdzc2gtcn
-#!       [...]
-#!     Nonha/zPwQDL8AAAALaG9ybGhAYmx1cHA=
-#!     -----END OPENSSH PRIVATE KEY-----
+apiVersion: v1
+kind: Secret
+metadata:
+  name: bingo-creds
+  namespace: #@ dv.bingo.namespace
+stringData:
+  ssh-key: #@ dv.repo["priv-key"]

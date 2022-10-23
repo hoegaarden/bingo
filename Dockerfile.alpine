@@ -1,0 +1,29 @@
+FROM cgr.dev/chainguard/alpine-base as downloader
+ARG DL_DIR='/downloads'
+
+RUN apk add --no-cache bash curl perl-utils
+
+SHELL [ "bash", "-e", "-u", "-o", "pipefail", "-c" ]
+
+RUN \
+    mkdir -p "${DL_DIR}" \
+    && install -m 0755 <(curl -L "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl") "${DL_DIR}/kubectl" \
+    && K14SIO_INSTALL_BIN_DIR="${DL_DIR}" bash <(curl -L https://carvel.dev/install.sh)
+
+
+FROM cgr.dev/chainguard/alpine-base AS alpine
+ARG DL_DIR='/downloads'
+ARG INSTALL_DIR='/usr/local/bin'
+
+RUN apk add --no-cache bash
+
+COPY --from=downloader "${DL_DIR}/kubectl" "${INSTALL_DIR}/kubectl"
+COPY --from=downloader "${DL_DIR}/ytt"     "${INSTALL_DIR}/ytt"
+COPY --from=downloader "${DL_DIR}/kapp"    "${INSTALL_DIR}/kapp"
+
+ARG user=doer
+ARG uid=256000
+# ARG uid=65532
+RUN adduser -D -k /dev/null -u "$uid" -g "$user" -s /bin/bash -h "/home/${user}" "$user"
+USER "${user}"
+WORKDIR "/home/${user}"

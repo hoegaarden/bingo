@@ -1,0 +1,14 @@
+apiVersion: kbld.k14s.io/v1alpha1
+kind: Config
+sources:
+- image: bingo
+  path: .
+  docker:
+    build:
+      pull: true
+      noCache: true
+      file: Dockerfile
+      buildkit: true
+destinations:
+- image: bingo
+  newImage: ghcr.io/hoegaarden/bingo/bingo

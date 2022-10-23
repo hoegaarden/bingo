@@ -28,20 +28,25 @@ thing any experienced engineer would opt for: A bunch of shell scripts!
 
 The vSphere pod runs two containers:
 - [git-sync] to pull in a git repo
-- [kubectl] to apply the whole world when a change in the git repo is detected
+- [bingo] to apply the whole world when a change in the git repo is detected
 
 [git-sync]: https://github.com/kubernetes/git-sync
-[kubectl]: https://bitnami.com/stack/kubectl
+[bingo]: ./Dockerfile
 
-The git-sync & kubectl containers share the git repo and a fifo. Once the
+The git-sync & bingo containers share the git repo and a fifo. Once the
 git-sync container discovers a change in the git repo, it notifies the other
-container via that fifo. The kubectl container kicks in and `kubectl apply`s
-and `kubectl delete`s some stuff in the following order:
+container via that fifo. The bingo container kicks in and `kapp deploy`s
+stuff in the following order:
 
-1. `${BASE}/${NS}/${CLUSTER}/workload.yml.delete` will be `kubectl delete`d on the guest cluster named `$CLUSTER`
-1. `${BASE}/${NS}/${CLUSTER}/cluster.yml.delete` will be `kubectl delete`d on the supervisor cluster
-1. `${BASE}/${NS}/${CLUSTER}/cluster.yml` will be `kubectl apply`d on the supervisor cluster
-1. `${BASE}/${NS}/${CLUSTER}/workload.yml` will be `kubectl apply`d on the guest cluster named `$CLUSTER`
+1. `${BASE}/${NS}/${CLUSTER}/cluster.yml`  
+   All those files will be collected and deployed as a `kapp`. Thus, if you
+   remove a cluster by deleting such a file, `kapp` will make sure to delete
+   the cluster from the supervisor.
+1. `${BASE}/${NS}/${CLUSTER}/*workload*.yml`  
+   A separate `kapp` will be deployed on each workload cluster with the files
+   matching the above glob. Here too, when you remove a file or any object in
+   any of those files, `kapp` will delete those objects from the respective
+   workload cluster.
 
 where
 
@@ -59,22 +64,30 @@ the kubeconfig of a guest cluster from secrets in the supervisor clusters. Thus
 you need to ensure the directories in the git repo are named correctly, the
 very same as you've named the workload namespaces and your clusters.
 
+All files, the `cluster.yml` and the `*workload*.yml` will ran through `ytt`
+before they get `kapp`lied. In those files you have accss to the following
+variables, which are derived from the directory path in the git repo (i.e.
+`$NS` & `$CLUSTER`)
+- in `cluster.yml`:
+  - `ns` the vSphere namespace the cluster is (about to) deployed into
+  - `cluster` the name of the cluster that is (about to) deployed
+- in `*workload*.yml`, if you load `ytt`'s `data` module:
+  - `data.values.clusterNS` the vSphere namespace of the cluster
+  - `data.values.cluster` the name of the cluster
+
 It runs everything in serial, and if there is an error on `apply` or `delete`
 it will just 🤷 and try again on the next update of the repo.
 
 ## Issues
 
-- It does not care about any ordering. If you need some ordering, e.g. delete
-  the `pkgi` before deleting the `sa`, you need to figure that out on your own
-  and slowly move objects from e.g. `workload.yml` to `workload.yml.delete`.
-- As said, if there are errors in an `apply` or `delete`, bingo won't care or
-  retry. You need to figure it out out-of-band or force a re-run.
-- It only every runs once, when it gets notified by git-sync. It will then
-  `apply` or `delete` everything, not just things that have changed. That is
-  all left to k8s itself to figure out if things need to be done or not.
-- Runs everything in serial
+- As said, if there are errors in an `kapp deploy` run, bingo won't care. It
+  will tell you in the logs, but won't do much about it.
+  However, it will periodically reapply, by default every 5min.
+- Runs everything in serial:
+  1. first runs all `cluster.yml`s
+  2. runs all `*workload*yml`, for on cluster after the other
 - Needs open firewalls, i.e. the supervisor cluster needs to be able to:
-  - pull the [git-sync] & [kubectl] images
+  - pull the [git-sync] & [bingo] images
   - pull the git repo from wherever you host it
   - connect from the pod in the bingo namespace to the loadbalancer fronting
     the kube-api of the guest cluster
@@ -89,18 +102,36 @@ shout at me if it breaks and messes up your lovely guest clusters!
 1. prepare your git repo with the directory/file structure layed out above (you
    can find an example in [./example/])
 1. set up all your workload namespaces
-1. configure [./bingo.yml]:
-   - add your namespaces
-   - configure `repo`, `dir`, and potentially other stuff in the `bingo-config` ConfigMap
-   - add the ssh-key, which is allowed to pull the repo, in the `bingo-creds` Secret
+1. configure bingo by setting up env vars:
+   - `export BINGO_namespaces='[ "ns01", "ns02" ]'`  
+     add all vSphere namespaces bingo should be able to deploy/manage clusters in
+   - `export BINGO_repo='{"url": "git@ithub.com:hoegaarden/bingo", "dir": "example", "priv-key": "-----BEGIN OPENSSH PRIVATE KEY-----...."}'`  
+     to specify which repo holds the cluster / workload, and the subdirectory
+     these configs are in, and which key we use to pull it
 1. deploy to the supervisor cluster
    ```bash
-   ytt -f bingo.yml | kubectl apply -f -
+   make install
    ```
 1. check, if it actually works, e.g.:
    ```bash
    kubectl tail -n bingo
    ```
+
+An example `.envrc` to setup all variables to deploy bingo could look something like:
+```bash
+export BINGO_namespaces='[ "ns01" ]'
+
+export BINGO_repo='
+url: git@github.com:hoegaarden/bingo
+dir: example
+priv-key: |
+  -----BEGIN OPENSSH PRIVATE KEY-----
+  b3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAABAAABlwAAAAdzc2gtcn
+    nope nope nope
+  Nonha/zPwQDL8AAAALaG9ybGhAYmx1cHA=
+  -----END OPENSSH PRIVATE KEY-----
+'
+```
 
 [./example/]: ./example/
 [./bingo.yml]: ./bingo.yml
@@ -125,12 +156,7 @@ First off, don't wait for any improvements.
 Secondly, there is quite some stuff that could be done, which could make this
 thing a bit better:
 
-- Use `kapp` instead of `kubectl`, which would allow for ordering of objects
-- Use `ytt` before applying the things, which would allow us to template some
-  things (e.g. the clusters name and namespace could be inferred from the
-  directory structure, ...)
 - acutally test this thing
 - publish container images with everything baked in, so we don't have maintain
   the scripts in a config map
 - implement in a proper language
-- run a reconcile every x minutes, kinda similar to what the kapp-controller does

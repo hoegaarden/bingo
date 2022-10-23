@@ -1,0 +1,10 @@
+apiVersion: kbld.k14s.io/v1alpha1
+kind: Config
+minimumRequiredVersion: 0.35.0
+overrides:
+- image: bingo
+  newImage: ghcr.io/hoegaarden/bingo/bingo@sha256:6e1c6ef63c85646d10dc61b32849a922f8f8366c4ce5f8ffea688cc506c22be6
+  preresolved: true
+- image: k8s.gcr.io/git-sync/git-sync:v3.6.1
+  newImage: k8s.gcr.io/git-sync/git-sync@sha256:3ac2523a158cf8b5922fb98c86723772c20a9facf45d65ae1c0d46d560a7230a
+  preresolved: true

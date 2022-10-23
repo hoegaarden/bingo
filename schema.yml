@@ -1,0 +1,15 @@
+#@data/values-schema
+---
+#@schema/default []
+namespaces: ["ns01"]
+
+bingo:
+  namespace: bingo
+  interval: 5m
+
+repo:
+  url: ""
+  branch: main
+  rev: HEAD
+  dir: ""
+  priv-key: ""

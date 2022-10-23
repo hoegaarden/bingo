@@ -1,0 +1,43 @@
+FROM debian:stable-slim as downloader
+ARG DL_DIR='/downloads'
+ARG DEBIAN_FRONTEND='noninteractive'
+
+SHELL [ "bash", "-e", "-u", "-o", "pipefail", "-c" ]
+
+RUN \
+    apt-get -y update \
+    && apt-get -y full-upgrade \
+    && apt-get -y install curl bash perl \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN \
+    mkdir -p "${DL_DIR}" \
+    && install -m 0755 <(curl -L "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl") "${DL_DIR}/kubectl" \
+    && K14SIO_INSTALL_BIN_DIR="${DL_DIR}" bash <(curl -L https://carvel.dev/install.sh)
+
+
+FROM debian:stable-slim AS debian
+ARG DL_DIR='/downloads'
+ARG INSTALL_DIR='/usr/local/bin'
+ARG DEBIAN_FRONTEND='noninteractive'
+
+RUN \
+    apt-get -y update \
+    && apt-get -y full-upgrade \
+    && apt-get -y install bash \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=downloader "${DL_DIR}/kubectl" "${INSTALL_DIR}/kubectl"
+COPY --from=downloader "${DL_DIR}/ytt"     "${INSTALL_DIR}/ytt"
+COPY --from=downloader "${DL_DIR}/kapp"    "${INSTALL_DIR}/kapp"
+
+ARG user=doer
+# ARG uid=4294967293
+# ARG gid=4294967293
+ARG uid=65533
+ARG gid=65533
+RUN \
+    groupadd -g "$gid" "$user" \
+    && useradd --create-home --shell /bin/bash --skel /dev/null --uid "$uid" --gid "$user" --home-dir "/home/${user}" "${user}"
+USER "${user}"
+WORKDIR "/home/${user}"
