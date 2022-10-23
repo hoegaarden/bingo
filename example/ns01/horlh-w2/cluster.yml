@@ -1,8 +1,8 @@
 apiVersion: run.tanzu.vmware.com/v1alpha2
 kind: TanzuKubernetesCluster
 metadata:
-  name: horlh-w2
-  namespace: ns01
+  name: #@ cluster
+  namespace: #@ ns
 spec:
   distribution:
     version: v1.19
