@@ -1277,7 +1277,42 @@ metadata:
   annotations:
     kapp.k14s.io/change-group: apps.kappctrl.k14s.io/kapp-controller-config
 data:
-  caCerts: ""
+  caCerts: |
+    # harbor's cert
+    -----BEGIN CERTIFICATE-----
+    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
+    2MEe0e1im2aUPQ/zPlNCPBX03wRzdHCCNlRrWjk=
+    -----END CERTIFICATE-----
   httpProxy: ""
   httpsProxy: ""
   noProxy: ""
