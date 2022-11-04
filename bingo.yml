@@ -152,6 +152,8 @@ spec:
           mountPath: /data
         - name: tmp
           mountPath: /tmp
+        - name: kapp-config
+          mountPath: /tmp/kapp-config/
       volumes:
       - name: creds
         secret:
@@ -169,6 +171,13 @@ spec:
         configMap:
           name: bingo-scripts
           defaultMode: 0755
+      - name: kapp-config
+        configMap:
+          name: bingo-config
+          items:
+          - key: kapp-config
+            mode: 0644
+            path: kapp-config.yml
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -193,6 +202,8 @@ data:
     set -o pipefail
 
     readonly ME='bingo'
+
+    readonly KAPP_CONFIG="/tmp/kapp-config/"
 
     apply() (
       local cmd="$1"
@@ -237,6 +248,13 @@ data:
       done
     )
 
+    loadKappConfig() {
+      local dir="$1"
+
+      tar -C "$KAPP_CONFIG" -h -cf - --exclude '*/.*' . \
+        | tar -C "$dir" -xf -
+    }
+
     applyWorkload() {
       local ns="$1"
       local cluster="$2"
@@ -255,6 +273,7 @@ data:
         return
       }
 
+      loadKappConfig "$dir"
       ytt -v clusterNS="$ns" -v cluster="$clusterName" -f "$dir" \
         | kapp --kubeconfig "$kconf" deploy --namespace default -y --dangerous-allow-empty-list-of-resources -a "$app" -f -
     }
@@ -272,8 +291,9 @@ data:
 
       log 'deploying clusters'
 
+      loadKappConfig "$dir"
       ytt -f "$dir" \
-        | kapp deploy -y --dangerous-allow-empty-list-of-resources -a "$app" -f -
+        | kapp deploy -c -y --dangerous-allow-empty-list-of-resources -a "$app" -f -
     }
 
     startPoker() {
@@ -341,6 +361,27 @@ data:
   #! period: 1m
   dir: #@ dv.repo.dir
   apply_interval: #@ dv.bingo.interval
+
+  kapp-config: |
+    apiVersion: kapp.k14s.io/v1alpha1
+    kind: Config
+    rebaseRules:
+    - &tkcRebaseRules
+      paths:
+      - [ metadata, annotations, kapp.k14s.io/original ]
+      - [ metadata, annotations, kapp.k14s.io/original-diff-md5 ]
+      - [ metadata, labels, run.tanzu.vmware.com/tkr ]
+      - [ spec, distribution, fullVersion ]
+      - [ spec, settings, network, cni, name ]
+      - [ spec, settings, network, pods, cidrBlocks ]
+      - [ spec, settings, network, serviceDomain ]
+      - [ spec, settings, network, services, cidrBlocks ]
+      - [ spec, topology, controlPlane, tkr, reference, name ]
+      - [ spec, topology, nodePools, {allIndexes: true}, tkr, reference, name ]
+      type: copy
+      sources: [ new, existing ]
+      resourceMatchers:
+      - apiVersionKindMatcher: {apiVersion: run.tanzu.vmware.com/v1alpha2, kind: TanzuKubernetesCluster}
 ---
 apiVersion: v1
 kind: Secret
