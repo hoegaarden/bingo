@@ -1,0 +1,20 @@
+#@ load("@ytt:data", "data")
+#@ load("@ytt:assert", "assert")
+
+#@ for pkgr in data.values.pkgrs:
+#@   if not pkgr.name or not pkgr.namespace or not pkgr.bundle:
+#@     assert.fail("data.values.pkgrs need to define all of: {}".format(["name","namespace","bundle"]))
+#@   end
+apiVersion: packaging.carvel.dev/v1alpha1
+kind: PackageRepository
+metadata:
+  name: #@ pkgr.name
+  namespace: #@ pkgr.namespace
+  annotations:
+    kapp.k14s.io/change-group.0: common/pkgrs
+    kapp.k14s.io/change-group.1: #@ "{}/{}.{}".format("common", "pkgr", pkgr.name)
+spec:
+  fetch:
+    imgpkgBundle:
+      image: #@ pkgr.bundle
+#@ end

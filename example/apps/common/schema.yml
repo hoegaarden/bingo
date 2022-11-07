@@ -1,0 +1,12 @@
+#@data/values-schema
+---
+
+#@schema/default [{"name":"tkg-1.6", "bundle":"harbor.10.220.3.197.nip.io/library/tkg/repo:v1.6.0", "namespace":"tanzu-package-repo-global"}]
+pkgrs:
+  - name: ""
+    bundle: ""
+    namespace: ""
+
+cert-manager:
+  enabled: true
+  version: 1.7.2+vmware.1-tkg.1

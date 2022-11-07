@@ -5,6 +5,8 @@ apiVersion: policy/v1beta1
 kind: PodSecurityPolicy
 metadata:
   name: tanzu-system-kapp-ctrl-restricted
+  annotations:
+    kapp.k14s.io/change-group: kapp-controller/psp
 spec:
   privileged: false
   allowPrivilegeEscalation: false
@@ -78,6 +80,8 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   name: internalpackagemetadatas.internal.packaging.carvel.dev
+  annotations:
+    kapp.k14s.io/change-group: kapp-controller/crd
 spec:
   group: internal.packaging.carvel.dev
   names:
@@ -137,6 +141,8 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   name: internalpackages.internal.packaging.carvel.dev
+  annotations:
+    kapp.k14s.io/change-group: kapp-controller/crd
 spec:
   group: internal.packaging.carvel.dev
   names:
@@ -493,6 +499,8 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   name: apps.kappctrl.k14s.io
+  annotations:
+    kapp.k14s.io/change-group: kapp-controller/crd
 spec:
   group: kappctrl.k14s.io
   names:
@@ -927,6 +935,8 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   name: packageinstalls.packaging.carvel.dev
+  annotations:
+    kapp.k14s.io/change-group: kapp-controller/crd
 spec:
   group: packaging.carvel.dev
   names:
@@ -1070,6 +1080,7 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     packaging.carvel.dev/global-namespace: tanzu-package-repo-global
+    kapp.k14s.io/change-group: kapp-controller/crd
   name: packagerepositories.packaging.carvel.dev
 spec:
   group: packaging.carvel.dev
@@ -1388,11 +1399,15 @@ kind: ServiceAccount
 metadata:
   name: kapp-controller-sa
   namespace: tkg-system
+  annotations:
+    kapp.k14s.io/change-group: kapp-controller/rbac
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
   name: kapp-controller-cluster-role
+  annotations:
+    kapp.k14s.io/change-group: kapp-controller/rbac
 rules:
 - apiGroups:
   - ""
@@ -1513,6 +1528,8 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
   name: kapp-controller-cluster-role-binding
+  annotations:
+    kapp.k14s.io/change-group: kapp-controller/rbac
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
@@ -1526,6 +1543,8 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
   name: pkg-apiserver:system:auth-delegator
+  annotations:
+    kapp.k14s.io/change-group: kapp-controller/rbac
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
@@ -1540,6 +1559,8 @@ kind: RoleBinding
 metadata:
   name: pkgserver-auth-reader
   namespace: kube-system
+  annotations:
+    kapp.k14s.io/change-group: kapp-controller/rbac
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
@@ -1548,3 +1569,73 @@ subjects:
 - kind: ServiceAccount
   name: kapp-controller-sa
   namespace: tkg-system
+
+---
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: cluster-packages
+  annotations:
+    kapp.k14s.io/change-group: cluster-packages/ns
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: cluster-packages
+  namespace: cluster-packages
+  annotations:
+    kapp.k14s.io/change-group: cluster-packages/rbac
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: cluster-packages
+  annotations:
+    kapp.k14s.io/change-group: cluster-packages/rbac
+rules:
+- apiGroups: ["*"]
+  resources: ["*"]
+  verbs:     ["*"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: cluster-packages
+  annotations:
+    kapp.k14s.io/change-group: cluster-packages/rbac
+subjects:
+- kind: ServiceAccount
+  name: cluster-packages
+  namespace: cluster-packages
+roleRef:
+  kind: ClusterRole
+  apiGroup: rbac.authorization.k8s.io
+  name: cluster-packages
+---
+#@ load("@ytt:data", "data")
+---
+apiVersion: kappctrl.k14s.io/v1alpha1
+kind: App
+metadata:
+  name: base
+  namespace: cluster-packages
+  annotations:
+    kapp.k14s.io/change-rule.0: "upsert after upserting kapp-controller/crd"
+    kapp.k14s.io/change-rule.1: "upsert after upserting cluster-packages/ns"
+    kapp.k14s.io/change-rule.2: "delete before deleting cluster-packages/ns"
+    kapp.k14s.io/change-rule.3: "delete after deleting cluster-packages/rbac"
+spec:
+  serviceAccountName: cluster-packages
+  fetch:
+  - git:
+      url: https://github.com/hoegaarden/bingo
+      ref: origin/main
+  template:
+  - ytt:
+      paths:
+      - example/apps/common
+      valuesFrom:
+      - path: #@ "/".join(["example", data.values.clusterNS, data.values.cluster, "values.yml"])
+  deploy:
+  - kapp: {}
