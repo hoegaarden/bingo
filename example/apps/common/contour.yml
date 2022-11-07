@@ -1,0 +1,96 @@
+#@ load("@ytt:data", "data")
+
+#@ c = data.values.contour
+#@ if c.enabled:
+---
+apiVersion: packaging.carvel.dev/v1alpha1
+kind: PackageInstall
+metadata:
+  name: contour
+  namespace: cluster-packages
+  annotations:
+    kapp.k14s.io/change-group: contour/main
+    kapp.k14s.io/change-rule: "delete before deleting contour/rbac"
+spec:
+  serviceAccountName: contour-installer
+  packageRef:
+    refName: contour.tanzu.vmware.com
+    versionSelection:
+      constraints: #@ c.version
+      prereleases: {}
+  values:
+  - secretRef:
+      name: contour-config
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: contour-config
+  namespace: cluster-packages
+  annotations:
+    kapp.k14s.io/change-group: contour/main
+stringData:
+  values.yml: |
+    infrastructure_provider: vsphere
+    namespace: tanzu-system-ingress
+    contour:
+      configFileContents: {}
+      useProxyProtocol: false
+      replicas: 2
+      pspNames: "vmware-system-restricted"
+      logLevel: info
+    envoy:
+      service:
+        type: NodePort
+        annotations: {}
+        nodePorts:
+          http: null
+          https: null
+        externalTrafficPolicy: Cluster
+        disableWait: false
+      hostPorts:
+        enable: true
+        http: 80
+        https: 443
+      hostNetwork: false
+      terminationGracePeriodSeconds: 300
+      logLevel: info
+      pspNames: null
+    certificates:
+      duration: 8760h
+      renewBefore: 360h
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: contour-installer
+  namespace: cluster-packages
+  annotations:
+    kapp.k14s.io/change-group: contour/rbac
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: contour-installer
+  annotations:
+    kapp.k14s.io/change-group: contour/rbac
+rules:
+- apiGroups: ["*"]
+  resources: ["*"]
+  verbs:     ["*"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: contour-installer
+  annotations:
+    kapp.k14s.io/change-group: contour/rbac
+subjects:
+- kind: ServiceAccount
+  name: contour-installer
+  namespace: cluster-packages
+roleRef:
+  kind: ClusterRole
+  apiGroup: rbac.authorization.k8s.io
+  name: contour-installer
+#@ end
