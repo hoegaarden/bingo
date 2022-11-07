@@ -1,0 +1,55 @@
+#@ load("@ytt:data", "data")
+
+#@ cm = data.values["cert-manager"]
+#@ if cm.enabled:
+---
+apiVersion: packaging.carvel.dev/v1alpha1
+kind: PackageInstall
+metadata:
+  name: cert-manager
+  namespace: cluster-packages
+  annotations:
+    kapp.k14s.io/change-group: cert-manager/main
+    kapp.k14s.io/change-rule: "delete before deleting cert-manager/rbac"
+spec:
+  serviceAccountName: cert-manager-installer
+  packageRef:
+    refName: cert-manager.tanzu.vmware.com
+    versionSelection:
+      constraints: #@ cm.version
+      prereleases: {}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: cert-manager-installer
+  namespace: cluster-packages
+  annotations:
+    kapp.k14s.io/change-group: cert-manager/rbac
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: cert-manager-installer
+  annotations:
+    kapp.k14s.io/change-group: cert-manager/rbac
+rules:
+- apiGroups: ["*"]
+  resources: ["*"]
+  verbs:     ["*"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: cert-manager-installer
+  annotations:
+    kapp.k14s.io/change-group: cert-manager/rbac
+subjects:
+- kind: ServiceAccount
+  name: cert-manager-installer
+  namespace: cluster-packages
+roleRef:
+  kind: ClusterRole
+  apiGroup: rbac.authorization.k8s.io
+  name: cert-manager-installer
+#@ end
