@@ -51,7 +51,7 @@ metadata:
     kapp.k14s.io/change-rule.0: "upsert after upserting kapp-controller/crd"
     kapp.k14s.io/change-rule.1: "upsert after upserting cluster-packages/ns"
     kapp.k14s.io/change-rule.2: "delete before deleting cluster-packages/ns"
-    kapp.k14s.io/change-rule.3: "delete after deleting cluster-packages/rbac"
+    kapp.k14s.io/change-rule.3: "delete before deleting cluster-packages/rbac"
 spec:
   serviceAccountName: cluster-packages
   fetch:
