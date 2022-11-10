@@ -41,18 +41,20 @@ metadata:
   name: #@ cluster
   namespace: #@ ns
 spec:
-  distribution:
-    version: v1.19
   topology:
     controlPlane:
       replicas: 1
       storageClass: vc01cl01-t0compute
       vmClass: best-effort-medium
+      tkr:
+        reference:
+          name: v1.20.12---vmware.1-tkg.1.b9a42f3
     nodePools:
     - name: workers
       replicas: 1
       storageClass: vc01cl01-t0compute
       vmClass: best-effort-medium
+      tkr: {}
   settings:
     network:
       trust:
