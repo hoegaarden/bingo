@@ -1,0 +1,63 @@
+#@ load("@ytt:base64", "base64")
+
+#@ harborCert = """-----BEGIN CERTIFICATE-----
+#@ MIIFyzCCA7OgAwIBAgIUHi+yaSAPzylp5MULPXk/FxXi0t8wDQYJKoZIhvcNAQEL
+#@ BQAwIDEeMBwGA1UEAwwVKi4xMC4yMjAuMy4xOTcubmlwLmlvMB4XDTIyMTAyNDE5
+#@ MzkxM1oXDTMyMDcyMzE5MzkxM1owIDEeMBwGA1UEAwwVKi4xMC4yMjAuMy4xOTcu
+#@ bmlwLmlvMIICIjANBgkqhkiG9w0BAQEFAAOCAg8AMIICCgKCAgEAt+B4Kbil/hQd
+#@ piEeRSB9o+y53pyNFDSWXQHYLjkP8oAqtDUOqmODRz0b3Dv7stRFKmjcsO7JpV+9
+#@ BsiVE+vZlvhAOIH/lcRG8S+PGDTOnWGuCUlHpvJeFWbl6QiLfIrwdoVnFONCxcII
+#@ /XXoOdHzA39RLwRI0NqaFJNT6dVtkhWH2njSW56nMSClOEKisesC3CCXcHrCtmvd
+#@ HQ+/C5TJH3MOrV/H6XTVzta1jU57zzQVmgWj+fPa6gDIATMY//1OX8cHN9z1w4kD
+#@ /lSSo1xlqw1A49pEs8dIwdF2AhHF7pUixRuoDEqtKH1EccNRXvhyy/7L3/Tdq5I7
+#@ BIpGIcqx+aqH9j8PMz7zIX3NzoB564GX7eu2duEZYYzRxv7/e1qdCNNwAeB2KRtE
+#@ uqiCgRAR9r0DxylQUS7j1bQZ/ZEpn8Xwqoh0NNpov3ralLqEH4Pres/g+1D6RfF9
+#@ EumaMkXAk2AnKO+6fpTURaNJd2dqnf/PmW7oBYlAi4H2U51Rz9BAhT0txpBQtHxA
+#@ YlMovWRkOlps+u0F9cPPfew8/k52hP5UuuXMDBArAvau6NHGZeABPGdoPu9onkyz
+#@ tRDqfTy54TtVAoJuzvADb1wvtJm4GE5YtAeRDi8G9pXmRvlF0k/+9L1C43QPmOL7
+#@ OPr9cy8E3ezIBxoKc/gQe82/8iHa+uMCAwEAAaOB/DCB+TAdBgNVHQ4EFgQURVoa
+#@ uraPWgrxEFxjc2FdWjruOd8wWwYDVR0jBFQwUoAURVoauraPWgrxEFxjc2FdWjru
+#@ Od+hJKQiMCAxHjAcBgNVBAMMFSouMTAuMjIwLjMuMTk3Lm5pcC5pb4IUHi+yaSAP
+#@ zylp5MULPXk/FxXi0t8wDAYDVR0TBAUwAwEB/zAOBgNVHQ8BAf8EBAMCA4gwOwYD
+#@ VR0lBDQwMgYIKwYBBQUHAwEGCCsGAQUFBwMCBggrBgEFBQcDAwYIKwYBBQUHAwQG
+#@ CCsGAQUFBwMRMCAGA1UdEQQZMBeCFSouMTAuMjIwLjMuMTk3Lm5pcC5pbzANBgkq
+#@ hkiG9w0BAQsFAAOCAgEAhZNFRZBrzY7gqtdxrZndUXAIAztSRfzNpbr1H/xq2FS+
+#@ erQT0GJE3aKFl9c5oZxek5tz4QQxZMzLNo0qvucFD42uFMZBfbATJwYWEN5pDp+W
+#@ oR3MhWD3ztlSg2GDDkg57tel3PuKjlardBdvpG0tr9zaxpVftE3g3aDEO3e5hSp8
+#@ BouFFOtGyQ+TiNhgBs2J9JodzwfcZOtXa2xG0PDEHz246gz7bve6QMRzdIlgksjV
+#@ yxGcZDjZSatiHh96HjDbVPCkh8Bt09UotfGWvUubS8NQI8MtXK4Qvc/25Rs281Et
+#@ y/KRp4ifc8zki687FCS1kzhO3soA44bdg1sr5teXL5VRqH6Bt6ln2wr5I7ZaRYhf
+#@ mbYJqqsTIKwxW0Pjc0ncENIw/IsNtsRbefqLIoUa5ctN9d9IO2k3btFA1Ej/UUSr
+#@ TIFki/TXiqI4QtgTgsXIHgv55QpvmrhRV10PsLfdajyOnDUWtvHGUBwiGMmfmbzG
+#@ Yd8bsuB1N3mmhyshwqMnKxniNnWrprfD6Gi7BA7PKKT7QM9voebmEg8bPGeRjXVC
+#@ hso93H1eUeWuEb372sxa7F4chKLscF1CnPZwMm1870fIIX2pmaVAaPUPSWuwddrA
+#@ Iy0PgRgEyDNcIUiL7jiK8vxnpevq/AZiw126suRWw9UaE4li84UVUNj8egyhQkU=
+#@ -----END CERTIFICATE-----"""
+
+---
+apiVersion: run.tanzu.vmware.com/v1alpha2
+kind: TanzuKubernetesCluster
+metadata:
+  name: #@ cluster
+  namespace: #@ ns
+spec:
+  topology:
+    controlPlane:
+      replicas: 1
+      storageClass: vc01cl01-t0compute
+      vmClass: best-effort-medium
+      tkr:
+        reference:
+          name: v1.20.12---vmware.1-tkg.1.b9a42f3
+    nodePools:
+    - name: workers
+      replicas: 1
+      storageClass: vc01cl01-t0compute
+      vmClass: best-effort-medium
+      tkr: {}
+  settings:
+    network:
+      trust:
+        additionalTrustedCAs:
+        - name: internal harbor
+          data: #@ base64.encode(harborCert)
