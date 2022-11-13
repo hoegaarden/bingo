@@ -1,0 +1,129 @@
+#@data/values-schema
+---
+
+#@schema/desc "Additional ClusterRoles"
+clusterRoles:
+- #@schema/desc "Name of the ClusterRole"
+  #@schema/examples ("deploy a pod-reader ClusterRole", "pod-reader")
+  name: ""
+
+  #@schema/desc "Rules of the ClusterRole, passed through as is"
+  #@schema/examples ("allow reading pods", [{"apiGroups": ["*"], "resources": ["pods"], "verbs":["get","list"]}])
+  #@schema/type any=True
+  #@schema/nullable
+  rules: null
+
+  #@schema/desc "Labels for the ClusterRole, passed through as is"
+  #@schema/examples ("add two labels", {"foo":"bar","blipp":"blupp"})
+  #@schema/type any=True
+  #@schema/nullable
+  labels: null
+  #@schema/desc "Annotations for the ClusterRole, passed through as is"
+  #@schema/examples ("add two annotations", {"anno.com/1":"someValue", "anno.com/2":"someOtherValue"})
+  #@schema/type any=True
+  #@schema/nullable
+  annotations: null
+
+
+#@schema/desc "Additional ClusterRoleBindings"
+clusterRoleBindings:
+- #@schema/desc "Name of the ClusterRoleBinding"
+  #@schema/examples ("Bind to the 'pod-reader' ClusterRole", "can-read-pods")
+  name: ""
+
+  #@schema/desc "Subjects of the ClusterRoleBinding, passed through as is"
+  #@schema/examples ("bind the group 'foo@bar.com' and the user 'Hugo'", [{"apiGroup": "rbac.authorization.k8s.io", "kind": "Group", "name": "foo@bar.com"},{"apiGroup": "rbac.authorization.k8s.io", "kind": "User", "name": "Hugo"}])
+  #@schema/type any=True
+  #@schema/nullable
+  subjects: null
+  #@schema/desc "Role-Ref of the ClusterRoleBinding, passed through as is"
+  #@schema/examples ("bind to the 'pod-reader' ClusterRole", {"apiGroup": "rbac.authorization.k8s.io", "kind": "ClusterRole", "name": "pod-reader"})
+  #@schema/type any=True
+  #@schema/nullable
+  roleRef: null
+
+  #@schema/desc "Labels for the ClusterRoleBinding, passed through as is"
+  #@schema/examples ("add two labels", {"foo":"bar","blipp":"blupp"})
+  #@schema/type any=True
+  #@schema/nullable
+  labels: null
+  #@schema/desc "Annotations for the ClusterRoleBinding, passed through as is"
+  #@schema/examples ("add two annotations", {"anno.com/1":"someValue", "anno.com/2":"someOtherValue"})
+  #@schema/type any=True
+  #@schema/nullable
+  annotations: null
+
+
+#@schema/desc "Namespaces to deploy"
+namespaces:
+- #@schema/desc "Name of the Namespace"
+  #@schema/examples ("Deploy Namespace 'foo-bar'", "foo-bar")
+  name: ""
+
+  #@schema/desc "Labels for the Namespace, passed through as is"
+  #@schema/examples ("add two labels", {"foo":"bar","blipp":"blupp"})
+  #@schema/type any=True
+  #@schema/nullable
+  labels: null
+  #@schema/desc "Annotations for the Namespace, passed through as is"
+  #@schema/examples ("add two annotations", {"anno.com/1":"someValue", "anno.com/2":"someOtherValue"})
+  #@schema/type any=True
+  #@schema/nullable
+  annotations: null
+
+  #@schema/desc "Additional Roles to deploy to this namespace"
+  roles:
+  - #@schema/desc "Name of the Role"
+    #@schema/examples ("Deploy a Role 'some-role' to this namespace", "some-role")
+    name: ""
+
+    #@schema/desc "Rules of the Role, passed through as is"
+    #@schema/examples ("allow management of httpproxies", [{"apiGroups": ["*"], "resources": ["httpproxies"], "verbs":["create","edit","delete","get","list"]}])
+    #@schema/type any=True
+    #@schema/nullable
+    rules: null
+
+    #@schema/desc "Labels for the Role, passed through as is"
+    #@schema/examples ("add two labels", {"foo":"bar","blipp":"blupp"})
+    #@schema/type any=True
+    #@schema/nullable
+    labels: null
+    #@schema/desc "Annotations for the Role, passed through as is"
+    #@schema/examples ("add two annotations", {"anno.com/1":"someValue", "anno.com/2":"someOtherValue"})
+    #@schema/type any=True
+    #@schema/nullable
+    annotations: null
+
+  #@schema/desc "Additional RoleBindings to deploy to this namespace"
+  roleBindings:
+  - #@schema/desc "Name of the Rolebinding"
+    #@schema/examples ("Deploy a RoleBinding 'some-rolebinding' to this namespace", "some-rolebinding")
+    name: ""
+
+    #@schema/desc "The Role binding to, mutually exclusive with 'clusterRole'"
+    #@schema/examples ("Bind to the 'some-role' Role", "some-role")
+    role: ""
+    #@schema/desc "The ClusterRole binding to, mutually exclusive with 'role'"
+    #@schema/examples ("Bind to the 'edit' ClusterRole", "edit")
+    clusterRole: ""
+
+    #@schema/desc "Users binding to that ClusterRole or Role.\nCan be empty, but at least one of 'users', 'groups', or 'serviceAccounts' need to be configured"
+    #@schema/examples ("bind the users 'Hugo' & 'Albert'", ["Hugo", "Albert"])
+    users: [""]
+    #@schema/desc "Groups binding to that ClusterRole or Role.\nCan be empty, but at least one of 'users', 'groups', or 'serviceAccounts' need to be configured"
+    #@schema/examples ("bind the groups 'some@example.org' & 'admins@example.org'", ["some@example.org","admins@example.org"])
+    groups: [""]
+    #@schema/desc "ServiceAccounts binding to that ClusterRole or Role.\nCan be empty, but at least one of 'users', 'groups', or 'serviceAccounts' need to be configured"
+    #@schema/examples ("bind the ServiceAccounts 'this-sa' & 'that-sa'", ["this-sa", "that-sa"])
+    serviceAccounts: [""]
+
+    #@schema/desc "Labels for the ClusterRole, passed through as is"
+    #@schema/examples ("add two labels", {"foo":"bar","blipp":"blupp"})
+    #@schema/type any=True
+    #@schema/nullable
+    labels: null
+    #@schema/desc "Annotations for the ClusterRole, passed through as is"
+    #@schema/examples ("add two annotations", {"anno.com/1":"someValue", "anno.com/2":"someOtherValue"})
+    #@schema/type any=True
+    #@schema/nullable
+    annotations: null

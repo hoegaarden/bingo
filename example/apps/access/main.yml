@@ -1,0 +1,153 @@
+#@ load("@ytt:data", "data")
+#@ load("@ytt:template", "template")
+#@ load("@ytt:assert", "assert")
+
+
+#@ def renderNamespace(ns):
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: #@ ns.name
+  #@ if/end ns.labels:
+  labels: #@ ns.labels
+  annotations:
+    #@ if/end ns.annotations:
+    _: #@ template.replace( ns.annotations )
+    kapp.k14s.io/change-group: access/ns
+#@ end
+
+
+#@ def renderRole(ns, role):
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: #@ role.name
+  namespace: #@ ns
+  #@ if/end role.labels:
+  labels: #@ role.labels
+  annotations:
+    #@ if/end role.annotations:
+    _: #@ template.replace( role.annotations )
+    kapp.k14s.io/change-group: access/ns-roles
+    kapp.k14s.io/change-rule: upsert after upserting access/ns
+rules: #@ role.rules
+#@ end
+
+
+#@ def subjects(users=[], groups=[], sas=[]):
+#@   subjects = []
+#@   for name in users:
+#@     subjects.append({ "apiGroup": "rbac.authorization.k8s.io", "kind": "User", "name": name })
+#@   end
+#@   for name in groups:
+#@     subjects.append({ "apiGroup": "rbac.authorization.k8s.io", "kind": "Group", "name": name })
+#@   end
+#@   for name in sas:
+#@     subjects.append({ "kind": "ServiceAccount", "name": name })
+#@   end
+#@   return subjects
+#@ end
+
+
+#@ def hasSubjectsAndRefs(roleBinding):
+#@   if (len(roleBinding.users) + len(roleBinding.groups) + len(roleBinding.serviceAccounts)) < 1:
+#@     return False
+#@   end
+#@   if (len(roleBinding.role) + len(roleBinding.clusterRole)) < 1:
+#@     return False
+#@   end
+#@   return True
+#@ end
+
+
+#@ def roleBinding(name, ns, roleName, roleType, subjects, labels=[], annotations=[]):
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: #@ name
+  namespace: #@ ns
+  #@ if/end labels:
+  labels: #@ labels
+  annotations:
+    #@ if/end annotations:
+    _: #@ template.replace(annotations)
+    #@ if/end roleType == "Role":
+    kapp.k14s.io/change-rule: "upsert after upserting access/ns-roles"
+    #@ if/end roleType == "ClusterRole":
+    kapp.k14s.io/change-rule: "upsert after upserting access/cluster-roles"
+    kapp.k14s.io/update-strategy: fallback-on-replace
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: #@ roleType
+  name: #@ roleName
+subjects: #@ subjects
+#@ end
+
+
+#@ def renderBinding(ns, binding):
+#@   if binding.role and binding.clusterRole:
+#@     assert.fail("'role' and 'clusterRole' in a namespace's roleBinding are mutually exclusive")
+#@   end
+#@
+#@   subjs = subjects(binding.users or [], binding.groups or [], binding.serviceAccounts or [])
+#@
+#@   if binding.role:
+#@     return roleBinding(binding.name, ns, binding.role, "Role", subjs, binding.labels, binding.annotations)
+#@   end
+#@
+#@   if binding.clusterRole:
+#@     return roleBinding(binding.name, ns, binding.clusterRole, "ClusterRole", subjs, binding.labels, binding.annotations)
+#@   end
+#@ end
+
+
+#! ---- main ----
+
+#@ for cr in data.values.clusterRoles:
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: #@ cr.name
+  #@ if/end cr.labels:
+  labels: #@ cr.labels
+  annotations:
+    #@ if/end cr.annotations:
+    _: #@ template.replace( cr.annotations )
+    kapp.k14s.io/change-group: access/cluster-roles
+rules: #@ cr.rules
+#@ end
+#@ for crb in data.values.clusterRoleBindings:
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: #@ crb.name
+  #@ if/end crb.labels:
+  labels: #@ crb.labels
+  annotations:
+    #@ if/end crb.annotations:
+    _: #@ template.replace(crb.annotations)
+    kapp.k14s.io/update-strategy: fallback-on-replace
+roleRef: #@ crb.roleRef
+subjects: #@ crb.subjects
+#@ end
+
+#@ for ns in data.values.namespaces:
+#@
+--- #@ template.replace( renderNamespace(ns) )
+#@
+#@   for role in ns.roles:
+--- #@ template.replace( renderRole(ns.name, role) )
+#@   end
+#@
+#@   for rb in ns.roleBindings:
+#@     if hasSubjectsAndRefs(rb):
+--- #@ template.replace( renderBinding(ns.name, rb) )
+#@     end
+#@   end
+#@
+#@ end
