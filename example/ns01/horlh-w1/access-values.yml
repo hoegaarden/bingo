@@ -1,3 +1,43 @@
+clusterRoles:
+- name: test-cluster-role
+  rules:
+  - apiGroups: ["*"]
+    resources: ["*"]
+    verbs: ["*"]
+
+clusterRoleBindings:
+- name: test-cluster-rolebinding
+  subjects:
+  - apiGroup: rbac.authorization.k8s.io
+    kind: User
+    name: some-user
+  - apiGroup: rbac.authorization.k8s.io
+    kind: User
+    name: some-other-user
+  roleRef:
+    apiGroup: rbac.authorization.k8s.io
+    kind: ClusterRole
+    name: view
+
 namespaces:
 - name: foo
+
+  roles:
+  - name: some-ns-role
+    rules:
+    - apiGroups: ["*"]
+      resources: ["*"]
+      verbs: ["*"]
+
+  roleBindings:
+  - name: test-role-binding
+    clusterRole: test-cluster-role
+    users: [me]
+  - name: bind-ns-role
+    role: some-ns-role
+    users: [me]
+  - name: default-clusterrole
+    clusterRole: edit
+    serviceAccounts: [default]
+
 - name: bar
