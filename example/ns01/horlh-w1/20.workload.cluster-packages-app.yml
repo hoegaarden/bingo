@@ -64,5 +64,11 @@ spec:
       - example/apps/common
       valuesFrom:
       - path: #@ "/".join(["example", data.values.clusterNS, data.values.cluster, "values.yml"])
+  - ytt:
+      paths:
+      - "-" #! pipe in results from the previos step
+      - example/apps/access
+      valuesFrom:
+      - path: #@ "/".join(["example", data.values.clusterNS, data.values.cluster, "access-values.yml"])
   deploy:
   - kapp: {}
