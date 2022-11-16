@@ -188,6 +188,7 @@ data:
 
     apply() (
       local cmd="$1"
+      local configDir="${2:-.}"
       local clusterConf
       local clustersDir workloadDir workloadDirs=()
       local clusterNS clusterName
@@ -223,7 +224,7 @@ data:
 
       for workloadDir in "${workloadDirs[@]}" ; do
         IFS=',' read -r clusterNS clusterName <<< "$(basename "$workloadDir")"
-        applyWorkload "$clusterNS" "$clusterName" "$workloadDir" || {
+        applyWorkload "$clusterNS" "$clusterName" "$workloadDir" "$configDir" || {
           log 'applying cluster workloads for %s/%s failed' "$clusterNS" "$clusterName"
         }
       done
@@ -233,6 +234,7 @@ data:
       local ns="$1"
       local cluster="$2"
       local dir="$3"
+      local configDir="$4"
       local app="${ME}-${cluster}-workload"
 
       local secret="${cluster}-kubeconfig"
@@ -247,7 +249,7 @@ data:
         return
       }
 
-      ytt -v clusterNS="$ns" -v cluster="$clusterName" -f "$dir" -f /config/kapp-config.yml --allow-symlink-destination /config/ \
+      ytt -v configDir="$configDir" -v clusterNS="$ns" -v cluster="$clusterName" -f "$dir" -f /config/kapp-config.yml --allow-symlink-destination /config/ \
         | kapp --kubeconfig "$kconf" deploy -c --namespace default -y --dangerous-allow-empty-list-of-resources -a "$app" -f -
     }
 
@@ -301,7 +303,7 @@ data:
             local subDir="$( cat /config/dir )"
             cd "/data/repo/${subDir}"
             log "got '$cmd', running apply in ${PWD}"
-            apply "$cmd"
+            apply "$cmd" "${subDir}"
             ;;
         esac
       done

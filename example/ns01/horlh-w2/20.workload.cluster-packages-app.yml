@@ -58,11 +58,12 @@ spec:
   - git:
       url: https://github.com/hoegaarden/bingo
       ref: origin/main
+      subPath: #@ data.values.configDir
   template:
   - ytt:
       paths:
-      - example/apps/common
+      - apps/common
       valuesFrom:
-      - path: #@ "/".join(["example", data.values.clusterNS, data.values.cluster, "values.yml"])
+      - path: #@ "/".join([data.values.clusterNS, data.values.cluster, "pkgs-values.yml"])
   deploy:
   - kapp: {}
