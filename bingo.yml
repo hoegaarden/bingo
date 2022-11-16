@@ -101,27 +101,19 @@ spec:
       - name: git-sync
         image: k8s.gcr.io/git-sync/git-sync:v3.6.1
         command:
-        - /git-sync
-        - --ssh
-        - --ssh-known-hosts=false
-        - --ssh-known-hosts-file=/dev/null
-        - --dest=repo #! will become '--link'
-        - --wait=60 #! will become '--period'
-        env:
-        - name: GIT_SYNC_REPO
-          valueFrom:
-            configMapKeyRef: { name: bingo-config, key: repo }
-        - name: GIT_SYNC_BRANCH
-          valueFrom:
-            configMapKeyRef: { name: bingo-config, key: branch }
-        - name: GIT_SYNC_REV
-          valueFrom:
-            configMapKeyRef: { name: bingo-config, key: rev }
-        #! - name: GIT_SYNC_PERIOD
-        #!   valueFrom:
-        #!     configMapKeyRef: { name: bingo-config, key: period }
-        - name: GIT_SYNC_EXECHOOK_COMMAND
-          value: /scripts/poke.sh
+        - sh
+        - -c
+        - |
+            exec /git-sync \
+              --ssh \
+              --ssh-known-hosts=false \
+              --ssh-known-hosts-file=/dev/null \
+              --dest=repo \
+              --wait="$(cat /config/period)" \
+              --repo="$(cat /config/repo)" \
+              --branch="$(cat /config/branch)" \
+              --rev="$(cat /config/rev)" \
+              --exechook-command="/scripts/poke.sh"
         volumeMounts:
         - name: creds
           mountPath: /etc/git-secret/ssh
@@ -133,16 +125,11 @@ spec:
           mountPath: /scripts
         - name: data
           mountPath: /tmp/git
+        - name: config
+          mountPath: /config
       - name: bingo
         image: *bingo
         command: [ /scripts/bingo.sh ]
-        env:
-        - name: BINGO_SUB_DIR
-          valueFrom:
-            configMapKeyRef: { name: bingo-config, key: dir }
-        - name: BINGO_APPLY_INTERVAL
-          valueFrom:
-            configMapKeyRef: { name: bingo-config, key: apply_interval }
         volumeMounts:
         - name: shared
           mountPath: /shared
@@ -152,8 +139,8 @@ spec:
           mountPath: /data
         - name: tmp
           mountPath: /tmp
-        - name: kapp-config
-          mountPath: /kapp-config
+        - name: config
+          mountPath: /config
       volumes:
       - name: creds
         secret:
@@ -171,9 +158,9 @@ spec:
         configMap:
           name: bingo-scripts
           defaultMode: 0755
-      - name: kapp-config
+      - name: config
         configMap:
-          name: kapp-config
+          name: bingo-config
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -260,7 +247,7 @@ data:
         return
       }
 
-      ytt -v clusterNS="$ns" -v cluster="$clusterName" -f "$dir" -f /kapp-config/*.yml --allow-symlink-destination /kapp-config/ \
+      ytt -v clusterNS="$ns" -v cluster="$clusterName" -f "$dir" -f /config/kapp-config.yml --allow-symlink-destination /config/ \
         | kapp --kubeconfig "$kconf" deploy -c --namespace default -y --dangerous-allow-empty-list-of-resources -a "$app" -f -
     }
 
@@ -277,13 +264,13 @@ data:
 
       log 'deploying clusters'
 
-      ytt -f "$dir" -f /kapp-config/*.yml --allow-symlink-destination /kapp-config/ \
+      ytt -f "$dir" -f /config/kapp-config.yml --allow-symlink-destination /config/ \
         | kapp deploy -c -y --dangerous-allow-empty-list-of-resources -a "$app" -f -
     }
 
     startPoker() {
       while true ; do
-        sleep "$BINGO_APPLY_INTERVAL"
+        sleep "$( cat /config/apply_interval )"
         echo reapply > /shared/pipe
       done
     }
@@ -311,7 +298,8 @@ data:
             exit 10
             ;;
           *)
-            cd "/data/repo/${BINGO_SUB_DIR}"
+            local subDir="$( cat /config/dir )"
+            cd "/data/repo/${subDir}"
             log "got '$cmd', running apply in ${PWD}"
             apply "$cmd"
             ;;
@@ -343,16 +331,9 @@ data:
   repo: #@ dv.repo.url
   branch: #@ dv.repo.branch
   rev: #@ dv.repo.rev
-  #! period: 1m
+  period: #@ dv.repo.period
   dir: #@ dv.repo.dir
   apply_interval: #@ dv.bingo.interval
----
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: kapp-config
-  namespace: #@ dv.bingo.namespace
-data:
   kapp-config.yml: |
     apiVersion: kapp.k14s.io/v1alpha1
     kind: Config

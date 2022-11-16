@@ -11,5 +11,6 @@ repo:
   url: ""
   branch: main
   rev: HEAD
+  period: "60"
   dir: ""
   priv-key: ""
