@@ -1,4 +1,5 @@
 #@ load("@ytt:base64", "base64")
+#@ load("@ytt:yaml", "yaml")
 
 #@ harborCert = """-----BEGIN CERTIFICATE-----
 #@ MIIFyzCCA7OgAwIBAgIUHi+yaSAPzylp5MULPXk/FxXi0t8wDQYJKoZIhvcNAQEL
@@ -87,19 +88,24 @@ spec:
       name: #@ "{}-kubeconfig".format(clusterName)
       key: value
   fetch:
-  - inline:
-      paths:
-        test.yml: |
-          apiVersion: v1
-          kind: Namespace
-          metadata:
-            name: base
+  - git:
+      url: git@github.com:hoegaarden/bingo
+      ref: main
+      subPath: example-kapp-controller
+      secretRef:
+        name: git-repo
   template:
   - ytt:
       paths:
-      - "."
+      - "workloads/in-cluster/common/"
+      - #@ "workloads/in-cluster/{}/{}/".format(clusterNS, clusterName)
+      valuesFrom:
+      - path: #@ "configs/{}/{}/".format(clusterNS, clusterName)
   deploy:
   - kapp:
       rawOptions:
       - "--diff-changes=true"
       - "--dangerous-allow-empty-list-of-resources=true"
+      - "--wait-timeout=5m"
+      - "--kube-api-qps=20"
+      - "--kube-api-burst=30"

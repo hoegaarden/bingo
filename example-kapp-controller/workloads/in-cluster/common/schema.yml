@@ -1,0 +1,18 @@
+#@data/values-schema
+---
+
+base:
+  namespace: base
+
+kapp-controller:
+  enabled: true
+
+package-repo:
+  enabled: true
+  bundle: harbor.10.220.3.197.nip.io/library/tkg/repo:v1.6.0
+  name: tkg-1.6
+  namespace: tanzu-package-repo-global
+
+cert-manager:
+  enabled: true
+  version: 1.7.2+vmware.1-tkg.1

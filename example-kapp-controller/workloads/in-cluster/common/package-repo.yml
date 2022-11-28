@@ -1,0 +1,18 @@
+#@ load("@ytt:data", "data")
+
+#@ cfg = data.values["package-repo"]
+
+#@ if cfg.enabled:
+---
+apiVersion: packaging.carvel.dev/v1alpha1
+kind: PackageRepository
+metadata:
+  name: #@ cfg.name
+  namespace: #@ cfg.namespace
+  annotations:
+    kapp.k14s.io/change-group: repo/main
+spec:
+  fetch:
+    imgpkgBundle:
+      image: #@ cfg.bundle
+#@ end

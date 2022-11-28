@@ -1,0 +1,61 @@
+---
+#@ load("@ytt:data", "data")
+
+#@ cfg = data.values["cert-manager"]
+
+#@ if cfg.enabled:
+
+#@ rbacName = "cert-manager-installer"
+#@ baseNS = data.values.base.namespace
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: #@ rbacName
+  namespace: #@ baseNS
+  annotations:
+    kapp.k14s.io/change-group: cert-manager/rbac
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: #@ rbacName
+  annotations:
+    kapp.k14s.io/change-group: cert-manager/rbac
+rules:
+- apiGroups: [ "*" ]
+  resources: [ "*" ]
+  verbs: [ "*" ]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: #@ rbacName
+  annotations:
+    kapp.k14s.io/change-group: cert-manager/rbac
+subjects:
+- kind: ServiceAccount
+  name: #@ rbacName
+  namespace: #@ baseNS
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: #@ rbacName
+---
+apiVersion: packaging.carvel.dev/v1alpha1
+kind: PackageInstall
+metadata:
+  name: cert-manager
+  namespace: #@ baseNS
+  annotations:
+    kapp.k14s.io/change-group: cert-manager/main
+    kapp.k14s.io/change-rule.0: upsert after upserting repo/main
+    kapp.k14s.io/change-rule.1: upsert after upserting cert-manager/rbac
+    kapp.k14s.io/change-rule.2: delete before deleting cert-manager/rbac
+spec:
+  serviceAccountName: #@ rbacName
+  packageRef:
+    refName: cert-manager.tanzu.vmware.com
+    versionSelection:
+      constraints: #@ cfg.version
+#@ end
