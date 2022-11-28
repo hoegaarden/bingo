@@ -1,0 +1,23 @@
+apiVersion: kapp.k14s.io/v1alpha1
+kind: Config
+waitRules:
+- resourceMatchers: &tkcs
+  - apiVersionKindMatcher: {apiVersion: run.tanzu.vmware.com/v1alpha2, kind: TanzuKubernetesCluster}
+  conditionMatchers:
+  - type: Ready
+    status: "True"
+    success: true
+rebaseRules:
+- &tkcRebaseRules
+  resourceMatchers: *tkcs
+  paths:
+  - [ metadata, labels, run.tanzu.vmware.com/tkr ]
+  - [ spec, distribution, fullVersion ]
+  - [ spec, settings, network, cni, name ]
+  - [ spec, settings, network, pods, cidrBlocks ]
+  - [ spec, settings, network, serviceDomain ]
+  - [ spec, settings, network, services, cidrBlocks ]
+  - [ spec, topology, controlPlane, tkr, reference, name ]
+  - [ spec, topology, nodePools, {allIndexes: true}, tkr, reference, name ]
+  type: copy
+  sources: [ new, existing ]

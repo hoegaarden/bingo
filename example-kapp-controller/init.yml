@@ -1,0 +1,65 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: all-clusters-deployer
+  namespace: bingo
+  annotations:
+    kapp.k14s.io/change-group: all-clusters/rbac
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: all-clusters-deployer
+  annotations:
+    kapp.k14s.io/change-group: all-clusters/rbac
+rules:
+- apiGroups: [ run.tanzu.vmware.com ]
+  resources: [ tanzukubernetesclusters ]
+  verbs: [ "*" ]
+- apiGroups: [ kappctrl.k14s.io ]
+  resources: [ apps ]
+  verbs: [ "*" ]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: all-clusters-deployer
+  annotations:
+    kapp.k14s.io/change-group: all-clusters/rbac
+subjects:
+- kind: ServiceAccount
+  name: all-clusters-deployer
+  namespace: bingo
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: all-clusters-deployer
+---
+
+apiVersion: kappctrl.k14s.io/v1alpha1
+kind: App
+metadata:
+  name: all-clusters
+  namespace: bingo
+  annotations:
+    kapp.k14s.io/change-group: all-clusters/main
+    kapp.k14s.io/change-rule: delete before deleting all-clusters/rbac
+    kapp.k14s.io/change-rule: upsert after upserting all-clusters/rbac
+spec:
+  serviceAccountName: all-clusters-deployer
+  fetch:
+  - git:
+      url: git@github.com:hoegaarden/bingo
+      ref: main
+      subPath: example-kapp-controller
+      secretRef:
+        name: git-repo
+  template:
+  - ytt:
+      paths:
+      - clusters
+  deploy:
+  - kapp:
+      rawOptions:
+      - "--diff-changes=true"
+      - "--dangerous-allow-empty-list-of-resources=true"
