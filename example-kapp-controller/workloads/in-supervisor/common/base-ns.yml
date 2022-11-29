@@ -1,0 +1,36 @@
+#@ load("@ytt:data", "data")
+#@ load("@ytt:yaml", "yaml")
+
+#@ cfg = data.values.base
+
+#@ def createNS():
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: #@ cfg.namespace
+#@ end
+
+---
+apiVersion: kappctrl.k14s.io/v1alpha1
+kind: App
+metadata:
+  name: ns
+  annotations:
+    kapp.k14s.io/change-group: base/ns
+    no.namespace: ""
+spec:
+  fetch:
+  - inline:
+      paths:
+        ns.yaml: #@ yaml.encode(createNS())
+  template:
+  - ytt:
+      paths: [ "." ]
+  deploy:
+  - kapp:
+      rawOptions:
+      - "--diff-changes=true"
+      - "--dangerous-allow-empty-list-of-resources=true"
+      - "--wait-timeout=5m"
+      - "--kube-api-qps=20"
+      - "--kube-api-burst=30"

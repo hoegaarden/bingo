@@ -1,0 +1,8 @@
+#@data/values-schema
+---
+base:
+  namespace: base
+
+cert-manager:
+  enabled: true
+  version: 1.7.2+vmware.1-tkg.1
